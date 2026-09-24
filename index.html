@@ -97,20 +97,40 @@
   .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   @media(max-width: 500px) { .form-grid { grid-template-columns: 1fr; } }
 
-  /* 이미지 업로드 & 캔버스 */
-  .image-upload-area {
+  /* 사진 촬영 / 앨범 선택 버튼 */
+  .photo-btns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .photo-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 18px 10px;
     border: 2px dashed #a0b8d0;
     border-radius: 10px;
-    padding: 20px;
-    text-align: center;
-    cursor: pointer;
     background: #f5f9ff;
+    cursor: pointer;
     transition: all 0.2s;
+    text-align: center;
+    -webkit-tap-highlight-color: transparent;
   }
-  .image-upload-area:hover { border-color: #2e6da4; background: #eaf2ff; }
-  .image-upload-area input { display: none; }
-  .image-upload-area p { color: #888; font-size: 0.85rem; }
-  .image-upload-area .icon { font-size: 2rem; margin-bottom: 8px; }
+  .photo-btn:hover, .photo-btn:active { border-color: #2e6da4; background: #eaf2ff; }
+  .photo-btn input { display: none; }
+  .photo-btn .icon { font-size: 2rem; }
+  .photo-btn .txt { font-size: 0.9rem; font-weight: 700; color: #1a3a5c; }
+  .photo-btn .sub { font-size: 0.72rem; color: #888; }
+  .photo-btn.camera {
+    border-style: solid;
+    border-color: #2e6da4;
+    background: #2e6da4;
+  }
+  .photo-btn.camera .txt { color: #fff; }
+  .photo-btn.camera .sub { color: #d6e6f7; }
+  .photo-btn.camera:hover, .photo-btn.camera:active { background: #1a3a5c; border-color: #1a3a5c; }
 
   .canvas-wrapper {
     position: relative;
@@ -381,10 +401,21 @@
 
     <div class="form-card">
       <h2>📷 사진 첨부 및 표시</h2>
-      <div class="image-upload-area" onclick="document.getElementById('imgInput').click()">
-        <div class="icon">📸</div>
-        <p>클릭하여 사진 선택 (JPG, PNG, HEIC)</p>
-        <input type="file" id="imgInput" accept="image/*" onchange="loadImage(event)">
+      <div class="photo-btns">
+        <!-- 카메라 바로 촬영 (모바일에서 후면 카메라가 바로 열림) -->
+        <label class="photo-btn camera">
+          <div class="icon">📷</div>
+          <div class="txt">바로 촬영</div>
+          <div class="sub">카메라 실행</div>
+          <input type="file" id="camInput" accept="image/*" capture="environment" onchange="loadImage(event)">
+        </label>
+        <!-- 앨범에서 선택 -->
+        <label class="photo-btn">
+          <div class="icon">🖼</div>
+          <div class="txt">앨범에서 선택</div>
+          <div class="sub">JPG, PNG, HEIC</div>
+          <input type="file" id="imgInput" accept="image/*" onchange="loadImage(event)">
+        </label>
       </div>
 
       <div class="canvas-wrapper" id="canvasWrapper">
@@ -410,7 +441,7 @@
           <div class="color-dot" style="background:#ffff00;" onclick="setColor('#ffff00',this)"></div>
           <div class="color-dot" style="background:#00cc44;" onclick="setColor('#00cc44',this)"></div>
           <div class="color-dot" style="background:#0088ff;" onclick="setColor('#0088ff',this)"></div>
-          <div class="color-dot" style="background:#ffffff;" onclick="setColor('#ffffff',this)" style="border:1px solid #ccc;"></div>
+          <div class="color-dot" style="background:#ffffff;border-color:#ccc;" onclick="setColor('#ffffff',this)"></div>
         </div>
         <div style="display:flex;gap:8px;align-items:center;">
           <span style="font-size:0.8rem;font-weight:700;color:#555;">굵기:</span>
@@ -508,8 +539,10 @@ function switchTab(tab) {
 }
 
 // ===== 이미지 & 캔버스 =====
+// 카메라 촬영(camInput)과 앨범 선택(imgInput) 모두 이 함수를 사용
 function loadImage(e) {
-  const file = e.target.files[0];
+  const input = e.target;
+  const file = input.files[0];
   if (!file) return;
   const reader = new FileReader();
   reader.onload = function(ev) {
@@ -527,10 +560,17 @@ function loadImage(e) {
       ctx.drawImage(img, 0, 0, cW, cH);
       document.getElementById('canvasWrapper').style.display = 'block';
       document.getElementById('annotationTools').style.display = 'flex';
+      // 사진이 보이도록 스크롤
+      document.getElementById('canvasWrapper').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    };
+    img.onerror = function() {
+      alert('사진을 불러올 수 없습니다. 다른 사진을 선택해 주세요.');
     };
     img.src = ev.target.result;
   };
   reader.readAsDataURL(file);
+  // 같은 사진을 다시 찍거나 선택해도 동작하도록 초기화
+  input.value = '';
 }
 
 function redraw() {
@@ -769,6 +809,7 @@ async function submitReport() {
     document.getElementById('reportTitle').value = '';
     document.getElementById('reportDesc').value = '';
     document.getElementById('imgInput').value = '';
+    document.getElementById('camInput').value = '';
     bgImage = null; annotations = [];
     canvas.width = 10; canvas.height = 10;
     ctx.clearRect(0,0,10,10);

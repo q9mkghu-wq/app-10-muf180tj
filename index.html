@@ -353,6 +353,75 @@
 
   .loading { text-align: center; padding: 30px; color: #999; }
 
+  /* 사진 확대 힌트 */
+  .card-media { position: relative; cursor: zoom-in; }
+  .zoom-hint {
+    position: absolute;
+    right: 10px; bottom: 10px;
+    background: rgba(0,0,0,0.6);
+    color: #fff;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 20px;
+    pointer-events: none;
+  }
+  #modalImg { cursor: zoom-in; }
+
+  /* 전체화면 사진 뷰어 */
+  .viewer {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 2000;
+    background: #000;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  .viewer.open { display: block; }
+  .viewer-stage { position: absolute; inset: 0; overflow: hidden; }
+  #viewerImg {
+    position: absolute;
+    left: 0; top: 0;
+    transform-origin: 0 0;
+    max-width: none;
+    will-change: transform;
+    -webkit-user-drag: none;
+  }
+  .viewer-btn {
+    position: absolute;
+    width: 48px; height: 48px;
+    border: none;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.15);
+    color: #fff;
+    font-size: 1.4rem;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .viewer-btn:active { background: rgba(255,255,255,0.3); }
+  .viewer-close { top: 14px; right: 14px; }
+  .viewer-zoombar {
+    position: absolute;
+    left: 50%; bottom: 20px;
+    transform: translateX(-50%);
+    display: flex; gap: 10px; align-items: center;
+    background: rgba(0,0,0,0.55);
+    padding: 8px 12px;
+    border-radius: 30px;
+  }
+  .viewer-zoombar .viewer-btn { position: static; width: 42px; height: 42px; font-size: 1.2rem; }
+  #viewerPct { color: #fff; font-size: 0.85rem; font-weight: 700; min-width: 48px; text-align: center; }
+  .viewer-tip {
+    position: absolute;
+    top: 24px; left: 16px;
+    color: rgba(255,255,255,0.75);
+    font-size: 0.75rem;
+    text-shadow: 0 1px 3px #000;
+    pointer-events: none;
+  }
+
   /* 텍스트 입력 오버레이 */
   #textInput {
     position: absolute;
@@ -524,6 +593,21 @@
 
 </div>
 
+<!-- 전체화면 사진 뷰어 -->
+<div class="viewer" id="viewer">
+  <div class="viewer-stage" id="viewerStage">
+    <img id="viewerImg" src="" alt="확대 사진" draggable="false">
+  </div>
+  <div class="viewer-tip">두 손가락으로 벌리거나 두 번 탭하면 확대</div>
+  <button class="viewer-btn viewer-close" onclick="closeViewer()" aria-label="닫기">✕</button>
+  <div class="viewer-zoombar">
+    <button class="viewer-btn" onclick="zoomStep(1/1.5)" aria-label="축소">－</button>
+    <span id="viewerPct">100%</span>
+    <button class="viewer-btn" onclick="zoomStep(1.5)" aria-label="확대">＋</button>
+    <button class="viewer-btn" onclick="fitViewer()" aria-label="원래 크기">⟲</button>
+  </div>
+</div>
+
 <!-- 상세 모달 -->
 <div class="modal-overlay" id="modalOverlay" onclick="closeModal(event)">
   <div class="modal" id="modalContent">
@@ -531,7 +615,7 @@
     <h2 id="modalTitle"></h2>
     <div class="modal-info-grid" id="modalInfo"></div>
     <div class="modal-desc" id="modalDesc"></div>
-    <img id="modalImg" src="" alt="" style="display:none;">
+    <img id="modalImg" src="" alt="" style="display:none;" onclick="openViewer(this.src, event)">
   </div>
 </div>
 
@@ -918,7 +1002,7 @@ function renderList() {
         </div>
       </div>`;
     card.innerHTML = r.image
-      ? `<div class="card-media"><img class="card-img" src="${r.image}" alt="첨부사진"></div>${body}`
+      ? `<div class="card-media" onclick="openViewerById('${r.id}', event)"><img class="card-img" src="${r.image}" alt="첨부사진"><span class="zoom-hint">🔍 눌러서 확대</span></div>${body}`
       : body;
     list.appendChild(card);
   });
@@ -960,6 +1044,157 @@ function closeModal(e) {
 function closeModalDirect() {
   document.getElementById('modalOverlay').classList.remove('open');
 }
+
+// ===== 전체화면 사진 뷰어 (핀치 줌 · 드래그 · 두 번 탭 · 휠) =====
+const viewer = document.getElementById('viewer');
+const vStage = document.getElementById('viewerStage');
+const vImg = document.getElementById('viewerImg');
+const V = { s: 1, base: 1, tx: 0, ty: 0, iw: 0, ih: 0 };
+const vPointers = new Map();
+let vPinch = null, vMoved = false, vLastTap = 0;
+
+function openViewerById(id, e) {
+  const r = allReports.find(x => x.id === id);
+  if (r && r.image) openViewer(r.image, e);
+}
+
+function openViewer(src, e) {
+  if (e) e.stopPropagation();
+  if (!src) return;
+  vImg.onload = () => {
+    V.iw = vImg.naturalWidth; V.ih = vImg.naturalHeight;
+    vImg.style.width = V.iw + 'px';
+    vImg.style.height = V.ih + 'px';
+    fitViewer();
+  };
+  viewer.classList.add('open');
+  document.body.style.overflow = 'hidden';
+  vImg.src = src;
+  history.pushState({ viewer: true }, '');  // 휴대폰 뒤로가기로 닫기
+}
+
+function closeViewer(fromPop) {
+  if (!viewer.classList.contains('open')) return;
+  viewer.classList.remove('open');
+  document.body.style.overflow = '';
+  vPointers.clear(); vPinch = null;
+  if (!fromPop && history.state && history.state.viewer) history.back();
+}
+window.addEventListener('popstate', () => closeViewer(true));
+document.addEventListener('keydown', e => {
+  if (!viewer.classList.contains('open')) return;
+  if (e.key === 'Escape') closeViewer();
+  if (e.key === '+' || e.key === '=') zoomStep(1.5);
+  if (e.key === '-') zoomStep(1/1.5);
+});
+
+function fitViewer() {
+  const W = vStage.clientWidth, H = vStage.clientHeight;
+  V.base = Math.min(W / V.iw, H / V.ih);
+  V.s = V.base;
+  V.tx = (W - V.iw * V.s) / 2;
+  V.ty = (H - V.ih * V.s) / 2;
+  applyViewer();
+}
+
+function clampViewer() {
+  const W = vStage.clientWidth, H = vStage.clientHeight;
+  const w = V.iw * V.s, h = V.ih * V.s;
+  V.tx = w <= W ? (W - w) / 2 : Math.min(0, Math.max(W - w, V.tx));
+  V.ty = h <= H ? (H - h) / 2 : Math.min(0, Math.max(H - h, V.ty));
+}
+
+function applyViewer() {
+  clampViewer();
+  vImg.style.transform = `translate(${V.tx}px, ${V.ty}px) scale(${V.s})`;
+  document.getElementById('viewerPct').textContent = Math.round(V.s / V.base * 100) + '%';
+}
+
+// (px, py) 지점을 중심으로 확대/축소
+function zoomAt(px, py, newS) {
+  newS = Math.max(V.base, Math.min(V.base * 8, newS));
+  V.tx = px - (px - V.tx) * newS / V.s;
+  V.ty = py - (py - V.ty) * newS / V.s;
+  V.s = newS;
+  applyViewer();
+}
+
+function zoomStep(f) {
+  zoomAt(vStage.clientWidth / 2, vStage.clientHeight / 2, V.s * f);
+}
+
+function stagePt(e) {
+  const r = vStage.getBoundingClientRect();
+  return { x: e.clientX - r.left, y: e.clientY - r.top };
+}
+
+function pinchInfo() {
+  const [a, b] = [...vPointers.values()];
+  return { d: Math.hypot(a.x - b.x, a.y - b.y) || 1, mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2 };
+}
+
+vStage.addEventListener('pointerdown', e => {
+  vStage.setPointerCapture(e.pointerId);
+  vPointers.set(e.pointerId, stagePt(e));
+  vMoved = false;
+  if (vPointers.size === 2) {
+    const p = pinchInfo();
+    vPinch = { d: p.d, s: V.s, mx: p.mx, my: p.my };
+  }
+});
+
+vStage.addEventListener('pointermove', e => {
+  if (!vPointers.has(e.pointerId)) return;
+  const prev = vPointers.get(e.pointerId);
+  const cur = stagePt(e);
+  vPointers.set(e.pointerId, cur);
+  if (Math.abs(cur.x - prev.x) + Math.abs(cur.y - prev.y) > 2) vMoved = true;
+
+  if (vPointers.size >= 2 && vPinch) {
+    const p = pinchInfo();
+    // 손가락 중심 이동만큼 이동 + 거리 비율만큼 확대
+    V.tx += p.mx - vPinch.mx;
+    V.ty += p.my - vPinch.my;
+    vPinch.mx = p.mx; vPinch.my = p.my;
+    zoomAt(p.mx, p.my, vPinch.s * p.d / vPinch.d);
+  } else if (vPointers.size === 1) {
+    V.tx += cur.x - prev.x;
+    V.ty += cur.y - prev.y;
+    applyViewer();
+  }
+});
+
+function vPointerEnd(e) {
+  if (!vPointers.has(e.pointerId)) return;
+  const pt = vPointers.get(e.pointerId);
+  vPointers.delete(e.pointerId);
+  if (vPointers.size < 2) vPinch = null;
+  if (vPointers.size > 0 || vMoved) return;
+
+  // 두 번 탭: 확대 ↔ 원래 크기
+  const now = Date.now();
+  if (now - vLastTap < 300) {
+    vLastTap = 0;
+    if (V.s > V.base * 1.05) fitViewer();
+    else zoomAt(pt.x, pt.y, V.base * 2.5);
+    return;
+  }
+  vLastTap = now;
+  // 확대 안 된 상태에서 사진 바깥 검은 부분을 탭하면 닫기
+  if (e.target !== vImg && V.s <= V.base * 1.05) {
+    setTimeout(() => { if (vLastTap === now) closeViewer(); }, 300);
+  }
+}
+vStage.addEventListener('pointerup', vPointerEnd);
+vStage.addEventListener('pointercancel', vPointerEnd);
+
+vStage.addEventListener('wheel', e => {
+  e.preventDefault();
+  const p = stagePt(e);
+  zoomAt(p.x, p.y, V.s * (e.deltaY < 0 ? 1.2 : 1 / 1.2));
+}, { passive: false });
+
+window.addEventListener('resize', () => { if (viewer.classList.contains('open') && V.iw) fitViewer(); });
 
 // ===== 통계 =====
 function renderStats() {

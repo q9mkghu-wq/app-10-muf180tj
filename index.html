@@ -248,8 +248,38 @@
   .badge-type-클레임 { background: #fff3e0; color: #e67e22; }
   .badge-type-고객의견 { background: #e8f8e8; color: #27ae60; }
   .badge-type-기타 { background: #f0f0f0; color: #555; }
+  .card-desc:empty { display: none; }
   .card-desc { font-size: 0.83rem; color: #555; margin-top: 6px; line-height: 1.5; }
-  .card-img { margin-top: 10px; border-radius: 8px; max-width: 100%; max-height: 200px; object-fit: contain; background: #111; }
+  /* 사진 있는 카드: 왼쪽 큰 사진 + 오른쪽 정보 (PC), 위 사진 + 아래 정보 (모바일) */
+  .report-card.has-img {
+    display: grid;
+    grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+    gap: 20px;
+  }
+  .card-media { min-width: 0; }
+  .card-body { display: flex; flex-direction: column; min-width: 0; }
+  .card-body .card-actions { margin-top: auto; padding-top: 12px; }
+  .card-img {
+    display: block;
+    width: 100%;
+    height: 380px;
+    object-fit: contain;
+    background: #111;
+    border-radius: 8px;
+  }
+  @media (max-width: 640px) {
+    .report-card.has-img { grid-template-columns: 1fr; gap: 12px; }
+    /* 모바일 순서: 배지·제목·내용 → 사진(화면 꽉 차게) → 버튼 */
+    .report-card.has-img .card-body { display: contents; }
+    .report-card.has-img .card-header,
+    .report-card.has-img .card-title,
+    .report-card.has-img .card-desc { order: 1; }
+    .report-card.has-img .card-media { order: 2; }
+    .report-card.has-img .card-actions { order: 3; padding-top: 0; }
+    .report-card.has-img .card-title,
+    .report-card.has-img .card-desc { margin-top: -6px; }
+    .card-img { height: auto; max-height: 75vh; }
+  }
 
   .card-actions { margin-top: 12px; display: flex; gap: 8px; }
   .btn-del {
@@ -278,7 +308,7 @@
   .modal {
     background: #fff;
     border-radius: 14px;
-    max-width: 800px;
+    max-width: 1000px;
     width: 100%;
     max-height: 90vh;
     overflow-y: auto;
@@ -868,23 +898,28 @@ function renderList() {
   list.innerHTML = '';
   filtered.forEach(r => {
     const card = document.createElement('div');
-    card.className = 'report-card ' + (r.category || '');
-    card.innerHTML = `
-      <div class="card-header">
-        <div>
-          <span class="badge badge-cat">${r.category || '-'}</span>
-          <span class="badge badge-type-${r.issueType}">${r.issueType || '-'}</span>
+    card.className = 'report-card ' + (r.category || '') + (r.image ? ' has-img' : '');
+    // 카드 아무 곳이나 누르면 상세보기
+    card.onclick = (ev) => openModal(r.id, ev);
+    const body = `
+      <div class="card-body">
+        <div class="card-header">
+          <div>
+            <span class="badge badge-cat">${r.category || '-'}</span>
+            <span class="badge badge-type-${r.issueType}">${r.issueType || '-'}</span>
+          </div>
+          <div class="card-meta">${escHtml(r.driver || '')}<br>${r.date || ''}</div>
         </div>
-        <div class="card-meta">${r.driver || ''}<br>${r.date || ''}</div>
-      </div>
-      <div class="card-title">${escHtml(r.title || '')}</div>
-      <div class="card-desc">${escHtml((r.description || '').slice(0, 80))}${(r.description||'').length > 80 ? '...' : ''}</div>
-      ${r.image ? `<img class="card-img" src="${r.image}" alt="첨부사진">` : ''}
-      <div class="card-actions">
-        <button class="btn-del" onclick="deleteReport('${r.id}', event)">🗑 삭제</button>
-        <button class="tool-btn" onclick="openModal('${r.id}', event)" style="font-size:0.78rem;padding:6px 14px;">🔍 상세보기</button>
-      </div>
-    `;
+        <div class="card-title">${escHtml(r.title || '')}</div>
+        <div class="card-desc">${escHtml((r.description || '').slice(0, 120))}${(r.description||'').length > 120 ? '...' : ''}</div>
+        <div class="card-actions">
+          <button class="btn-del" onclick="deleteReport('${r.id}', event)">🗑 삭제</button>
+          <button class="tool-btn" onclick="openModal('${r.id}', event)" style="font-size:0.78rem;padding:6px 14px;">🔍 상세보기</button>
+        </div>
+      </div>`;
+    card.innerHTML = r.image
+      ? `<div class="card-media"><img class="card-img" src="${r.image}" alt="첨부사진"></div>${body}`
+      : body;
     list.appendChild(card);
   });
 }

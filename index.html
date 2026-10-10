@@ -95,7 +95,31 @@
   .form-row textarea { resize: vertical; min-height: 80px; }
 
   .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-  @media(max-width: 500px) { .form-grid { grid-template-columns: 1fr; } }
+  /* 휴대폰: 이름·날짜·분류·구분을 2칸씩 나란히, 전체를 촘촘하게 */
+  @media(max-width: 500px) {
+    header { padding: 10px 14px; }
+    header h1 { font-size: 1.15rem; }
+    header p { font-size: 0.72rem; margin-top: 2px; }
+    .tab-btn { padding: 10px 6px; }
+    .container { padding: 10px; }
+    .form-card { padding: 14px; margin-bottom: 12px; }
+    .form-card h2 { font-size: 0.95rem; margin-bottom: 10px; padding-bottom: 6px; }
+    .form-grid { gap: 8px 10px; }
+    .form-row { margin-bottom: 8px; }
+    .form-grid .form-row { margin-bottom: 0; }
+    .form-grid + .form-row { margin-top: 8px; }
+    .form-row label { font-size: 0.75rem; margin-bottom: 3px; }
+    .form-row input, .form-row select, .form-row textarea {
+      padding: 8px 10px;
+      font-size: 16px;   /* 16px 미만이면 아이폰이 입력할 때 화면을 확대함 */
+      min-width: 0;
+    }
+    .form-row input[type="date"] { padding: 7px 6px; }
+    .form-row textarea { min-height: 64px; }
+    .photo-btn { padding: 12px 8px; gap: 3px; }
+    .photo-btn .icon { font-size: 1.5rem; }
+    .btn-primary { margin-top: 4px; padding: 12px; }
+  }
 
   /* 사진 촬영 / 앨범 선택 버튼 */
   .photo-btns {
